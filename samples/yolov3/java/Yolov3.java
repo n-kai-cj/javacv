@@ -71,6 +71,9 @@ public class Yolov3 {
             // Showing information on the screen
             postprocess(frame, outs, outLayerType, nameList, confThreshold);
             OpenCVFX.imshow("yolov3", frame);
+            if (OpenCVFX.waitKey() == 27) {
+                break;
+            }
 
             frame.release();
             frame.close();

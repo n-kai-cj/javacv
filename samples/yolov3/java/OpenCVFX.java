@@ -3,6 +3,7 @@ import javafx.scene.Scene;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
@@ -44,6 +45,18 @@ public class OpenCVFX {
         }
     }
 
+    public static int waitKey() {
+        synchronized (list) {
+            for (ImShowThread im : list) {
+                int key = im.getKey();
+                if (key != -1) {
+                    return key;
+                }
+            }
+            return -1;
+        }
+    }
+
     public static void destroyAllWindows() {
         synchronized (list) {
             for (int i = 0; i < list.size(); ++i) {
@@ -64,6 +77,7 @@ public class OpenCVFX {
         private boolean isLaunch = false;
         private boolean destroyAllWindows = true;
         private Stage tmpStage = null;
+        private int keyCode;
     
         public ImShowThread(String name) {
             this.window_name = name;
@@ -106,7 +120,13 @@ public class OpenCVFX {
                 System.out.println(String.format("warn %s:%s", e.getClass().getSimpleName(), e.getMessage()));
             }
         }
-    
+
+        public int getKey() {
+            int result = this.keyCode;
+            this.keyCode = -1;
+            return result;
+        }
+
         @Override
         public void run() {
             ImageView imageView = new ImageView();
@@ -172,6 +192,7 @@ public class OpenCVFX {
                         this.tmpStage.show();
                     }
                 });
+                scene.addEventFilter(KeyEvent.KEY_PRESSED, keyEvent -> this.keyCode = keyEvent.getCode().getCode());
                 stage.setScene(scene);
                 stage.show();
                 if (this.tmpStage != null && this.tmpStage.isShowing()) {

@@ -5,7 +5,7 @@
 #include <opencv2/dnn.hpp>
 
 // Prompt Declare
-void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net net, std::vector<std::string> classes);
+void postprocess(cv::Mat &frame, const std::vector<cv::Mat> &outs, cv::dnn::Net net, std::vector<std::string> classes);
 
 int width = 640;
 int height = 480;
@@ -16,7 +16,8 @@ std::string conf = "yolov3.cfg";
 std::string model = "yolov3.weights";
 float confThreshold = 0.5;
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[])
+{
     cv::VideoCapture cap;
     cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
     cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
@@ -25,7 +26,8 @@ int main(int argc, char* argv[]) {
     std::ifstream ifs(classesFile.c_str());
     std::vector<std::string> classes;
     std::string line;
-    while (std::getline(ifs, line)) classes.push_back(line);
+    while (std::getline(ifs, line))
+        classes.push_back(line);
 
     cv::dnn::Net net = cv::dnn::readNetFromDarknet(conf, model);
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
@@ -33,14 +35,16 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> outNames = net.getUnconnectedOutLayersNames();
 
     cv::Mat frame, blob;
-    while (true) {
+    while (true)
+    {
         cap >> frame;
-        if (frame.empty()) {
+        if (frame.empty())
+        {
             break;
         }
 
         // Create a 4D blob from a frame
-        cv::dnn::blobFromImage(frame, blob, 1/255.0, cv::Size(inW, inH), cv::Scalar(0,0,0), true, false);
+        cv::dnn::blobFromImage(frame, blob, 1 / 255.0, cv::Size(inW, inH), cv::Scalar(0, 0, 0), true, false);
 
         // Sets the input to the netwrok
         net.setInput(blob);
@@ -58,26 +62,29 @@ int main(int argc, char* argv[]) {
         postprocess(frame, outs, net, classes);
 
         cv::imshow("yolov3", frame);
-        if (cv::waitKey(30) == 27) {
+        if (cv::waitKey(30) == 27)
+        {
             break;
         }
-        
     }
     cap.release();
     cv::destroyAllWindows();
     return 0;
 }
 
-
-void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net net, std::vector<std::string> classes) {
+void postprocess(cv::Mat &frame, const std::vector<cv::Mat> &outs, cv::dnn::Net net, std::vector<std::string> classes)
+{
     static std::vector<int> outLayers = net.getUnconnectedOutLayers();
     static std::string outLayerType = net.getLayer(outLayers[0])->type;
 
-    if (outLayerType == "Region") {
-        for (cv::Mat out : outs) {
-            float* data = (float*)out.data;
+    if (outLayerType == "Region")
+    {
+        for (cv::Mat out : outs)
+        {
+            float *data = (float *)out.data;
             // retrieve each detected objects
-            for (int i = 0; i < out.rows; ++i, data+=out.cols) {
+            for (int i = 0; i < out.rows; ++i, data += out.cols)
+            {
                 int cx = (int)(data[0] * frame.cols);
                 int cy = (int)(data[1] * frame.rows);
                 int w = (int)(data[2] * frame.cols);
@@ -88,18 +95,19 @@ void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net 
 
                 cv::minMaxLoc(scores, 0, &confidence, 0, &classIdPoint);
 
-                if (confThreshold < confidence) {
+                if (confThreshold < confidence)
+                {
                     int left = cx - w / 2;
                     int top = cy - h / 2;
-                    cv::rectangle(frame, cv::Rect(left, top, w, h), cv::Scalar(255,(128*i)%256,0), 2);
+                    cv::rectangle(frame, cv::Rect(left, top, w, h), cv::Scalar(255, (128 * i) % 256, 0), 2);
                     std::string label = cv::format("%s %.2f", classes[classIdPoint.x].c_str(), confidence);
                     int baseline;
                     cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
 
                     top = std::max(top, labelSize.height);
-                    cv::rectangle(frame, cv::Point(left, top-labelSize.height),
-                        cv::Point(left + labelSize.width, top + baseline), cv::Scalar::all(255), cv::FILLED);
-                    cv::putText(frame, label, cv::Point(left, top), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0,0,0));
+                    cv::rectangle(frame, cv::Point(left, top - labelSize.height),
+                                  cv::Point(left + labelSize.width, top + baseline), cv::Scalar::all(255), cv::FILLED);
+                    cv::putText(frame, label, cv::Point(left, top), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
                 }
             }
         }
