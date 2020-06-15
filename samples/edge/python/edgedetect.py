@@ -3,9 +3,10 @@ import numpy as np
 
 width = 640
 height = 480
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture()
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+cap.open(0)
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -13,7 +14,7 @@ while True:
 
     # gray scale and gaussian blur
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (3,3), 0)
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
 
     # sobel
     sobelX = cv2.Sobel(gray, cv2.CV_16S, 1, 0, ksize=3)
@@ -33,7 +34,7 @@ while True:
     h1 = cv2.hconcat((gray, sobel))
     h2 = cv2.hconcat((laplacian, canny))
     show = cv2.vconcat((h1, h2))
-    
+
     cv2.imshow("EdgeDetect", show)
 
     key = cv2.waitKey(10)

@@ -10,11 +10,12 @@ conf = "yolov3.cfg"
 model = "yolov3.weights"
 confThreshold = 0.5
 
+
 def postprocess(frame, outs, outLayerType, classes):
-    
+
     if outLayerType == 'Region':
         for out in outs:
-            for i,data in enumerate(out):
+            for i, data in enumerate(out):
                 box = data[0:4] * np.array([width, height, width, height])
                 cx = int(box[0])
                 cy = int(box[1])
@@ -27,18 +28,20 @@ def postprocess(frame, outs, outLayerType, classes):
                     left = int(cx - w / 2)
                     top = int(cy - h / 2)
                     cv2.rectangle(frame,
-                        (left, top),
-                        (left+w, top+h),
-                        (255, (128*i)%256,0), 2)
+                                  (left, top),
+                                  (left+w, top+h),
+                                  (255, (128*i) % 256, 0), 2)
                     label = "{} {:.2f}".format(classes[classId], confidence)
-                    labelSize, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    labelSize, baseline = cv2.getTextSize(
+                        label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                     top = max(top, labelSize[1])
                     cv2.rectangle(frame,
-                        (left, top-labelSize[1]),
-                        (left+labelSize[0], top+baseline),
-                        (255,255,255), cv2.FILLED)
+                                  (left, top-labelSize[1]),
+                                  (left+labelSize[0], top+baseline),
+                                  (255, 255, 255), cv2.FILLED)
                     cv2.putText(frame, label,
-                    (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0))
+                                (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+
 
 if __name__ == '__main__':
     print("--- start ---")
@@ -66,7 +69,7 @@ if __name__ == '__main__':
 
         # Create a 4D blob from a frame
         blob = cv2.dnn.blobFromImage(frame, 1/255.0, (inW, inH),
-        swapRB=True, crop=False)
+                                     swapRB=True, crop=False)
 
         # Sets the input to the network
         net.setInput(blob)
