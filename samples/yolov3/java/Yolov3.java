@@ -1,5 +1,6 @@
 import org.bytedeco.javacpp.DoublePointer;
 import org.bytedeco.javacpp.IntPointer;
+import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.indexer.FloatRawIndexer;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_dnn;
@@ -11,6 +12,7 @@ import org.bytedeco.opencv.opencv_dnn.Net;
 import org.bytedeco.opencv.opencv_videoio.VideoCapture;
 
 import java.io.IOException;
+import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -28,6 +30,9 @@ public class Yolov3 {
         String model = "yolov3.weights";
 
         Net net = opencv_dnn.readNetFromDarknet(configuration, model);
+        net.setPreferableBackend(opencv_dnn.DNN_BACKEND_OPENCV);
+        net.setPreferableTarget(opencv_dnn.DNN_TARGET_CPU);
+
         ArrayList<String> nameList;
         try {
             nameList = (ArrayList<String>) Files.readAllLines(Paths.get(cocoNames), StandardCharsets.UTF_8);
@@ -83,37 +88,75 @@ public class Yolov3 {
     }
 
     private static void postprocess(Mat frame, MatVector outs, String outLayerType, ArrayList<String> nameList, double confThreshold) {
+        ArrayList<Rect> rects = new ArrayList<>();
+        FloatBuffer confs = FloatBuffer.allocate(Float.BYTES * 100);
+        ArrayList<Integer> classIds = new ArrayList<>();
+
         if (outLayerType.startsWith("Region")) {
             for (int i = 0; i < outs.size(); ++i) {
                 Mat o = outs.get(i);
                 FloatRawIndexer data = o.createIndexer();
                 for (int j = 0; j < o.rows(); ++j) {
-                    int cx = (int) (data.get(j, 0) * frame.cols());
-                    int cy = (int) (data.get(j, 1) * frame.rows());
-                    int w = (int) (data.get(j, 2) * frame.cols());
-                    int h = (int) (data.get(j, 3) * frame.rows());
                     Mat scores = o.row(j).colRange(5, o.cols());
                     Point classIdPoint = new Point(1);
                     DoublePointer confidence = new DoublePointer(1);
                     opencv_core.minMaxLoc(scores, null, confidence, null, classIdPoint, null);
 
                     if (confThreshold < confidence.get()) {
+                        int cx = (int) (data.get(j, 0) * frame.cols());
+                        int cy = (int) (data.get(j, 1) * frame.rows());
+                        int w = (int) (data.get(j, 2) * frame.cols());
+                        int h = (int) (data.get(j, 3) * frame.rows());
                         int left = cx - w / 2;
                         int top = cy - h / 2;
-                        Scalar color = new Scalar(0, 255, (128 * j) % 256, 0);
-                        String label = String.format("%s %.2f", nameList.get(classIdPoint.x()), confidence.get());
-                        IntPointer baseline = new IntPointer(1);
-                        Size labelSize = opencv_imgproc.getTextSize(label, opencv_imgproc.FONT_HERSHEY_SIMPLEX, 0.5, 1, baseline);
-                        opencv_imgproc.rectangle(frame, new Rect(left, top, w, h),
-                                color, 2, opencv_imgproc.CV_AA, 0);
-                        opencv_imgproc.rectangle(frame, new Point(left, top - labelSize.height()),
-                                new Point(left + labelSize.width(), top + baseline.get()),
-                                Scalar.all(255), opencv_imgproc.FILLED, opencv_imgproc.CV_AA, 0);
-                        opencv_imgproc.putText(frame, label, new Point(left, top), opencv_imgproc.FONT_HERSHEY_SIMPLEX,
-                                0.5, new Scalar(0, 0, 0, 0), 1, opencv_imgproc.CV_AA, false);
+                        rects.add(new Rect(left, top, w, h));
+                        confs.put((float) confidence.get());
+                        classIds.add(classIdPoint.x());
                     }
                 }
             }
+        }
+
+        if (rects.size() == 0) {
+            return;
+        }
+        confs.flip();
+
+        // apply non-maximum suppression to suppress weak, overlapping bboxes
+        RectVector boxes = new RectVector();
+        rects.forEach(boxes::push_back);
+        FloatPointer confidences = new FloatPointer(confs);
+        IntPointer indices = new IntPointer(rects.size());
+        opencv_dnn.NMSBoxes(boxes, confidences, 0.8f, 0.4f, indices);
+
+        for (int i = (int) indices.position(); i < indices.limit(); i++) {
+            int idx = indices.get(i);
+            Rect box = boxes.get(idx);
+
+            int tx = box.x();
+            int ty = box.y();
+            int bx = box.x() + box.width();
+            int by = box.y() + box.height();
+            Rect rect = new Rect(new Point(tx, ty), new Point(bx, by));
+
+            final int thickness = 1;
+            final Scalar borderColor = new Scalar(0, 255, (128 * idx) % 256, 0);
+            final Scalar fontColor = new Scalar(0, 0, 0, 120);
+            final int font = opencv_imgproc.FONT_HERSHEY_DUPLEX;
+            final double fontScale = 1.0;
+            final String label = String.format("%s : %.2f[%%]", nameList.get(classIds.get(idx)), confidences.get(idx) * 100.0);
+            final Size textSize = opencv_imgproc.getTextSize(label, font, fontScale, thickness, (int[]) null);
+            final int textTy = Math.max(ty - 10, 0);
+
+            opencv_imgproc.rectangle(frame, rect,
+                    borderColor, thickness, opencv_imgproc.CV_AA, 0);
+            opencv_imgproc.rectangle(frame,
+                    new Rect(new Point(tx, textTy - textSize.height()), new Point(bx, ty)),
+                    borderColor, opencv_imgproc.FILLED, opencv_imgproc.CV_AA, 0);
+            opencv_imgproc.putText(frame,
+                    label, new Point(tx, textTy), font, fontScale, fontColor,
+                    thickness, opencv_imgproc.LINE_AA, false);
+
         }
     }
 

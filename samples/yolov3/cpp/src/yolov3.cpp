@@ -7,8 +7,6 @@
 // Prompt Declare
 void postprocess(cv::Mat &frame, const std::vector<cv::Mat> &outs, cv::dnn::Net net, std::vector<std::string> classes);
 
-int width = 640;
-int height = 480;
 int inW = 416;
 int inH = 416;
 std::string classesFile = "coco.names";
@@ -19,8 +17,8 @@ float confThreshold = 0.5;
 int main(int argc, char *argv[])
 {
     cv::VideoCapture cap;
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, width);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, height);
+    cap.set(cv::CAP_PROP_FRAME_WIDTH, 640);
+    cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
     cap.open(0);
 
     std::ifstream ifs(classesFile.c_str());
@@ -56,7 +54,7 @@ int main(int argc, char *argv[])
         std::vector<double> layersTimings;
         double tick_freq = cv::getTickFrequency();
         double time_ms = net.getPerfProfile(layersTimings) / tick_freq * 1000.0;
-        //fprintf(stdout, "inference time %.1f[ms]\n", time_ms);
+        fprintf(stdout, "inference time %.1f[ms]\n", time_ms);
 
         // Showing information on the screen
         postprocess(frame, outs, net, classes);
@@ -76,6 +74,9 @@ void postprocess(cv::Mat &frame, const std::vector<cv::Mat> &outs, cv::dnn::Net 
 {
     static std::vector<int> outLayers = net.getUnconnectedOutLayers();
     static std::string outLayerType = net.getLayer(outLayers[0])->type;
+    std::vector<cv::Rect> boxes;
+    std::vector<float> confidences;
+    std::vector<int> classIds;
 
     if (outLayerType == "Region")
     {
@@ -85,10 +86,6 @@ void postprocess(cv::Mat &frame, const std::vector<cv::Mat> &outs, cv::dnn::Net 
             // retrieve each detected objects
             for (int i = 0; i < out.rows; ++i, data += out.cols)
             {
-                int cx = (int)(data[0] * frame.cols);
-                int cy = (int)(data[1] * frame.rows);
-                int w = (int)(data[2] * frame.cols);
-                int h = (int)(data[3] * frame.rows);
                 cv::Mat scores = out.row(i).colRange(5, out.cols);
                 cv::Point classIdPoint;
                 double confidence;
@@ -97,19 +94,42 @@ void postprocess(cv::Mat &frame, const std::vector<cv::Mat> &outs, cv::dnn::Net 
 
                 if (confThreshold < confidence)
                 {
+                    int cx = (int)(data[0] * frame.cols);
+                    int cy = (int)(data[1] * frame.rows);
+                    int w = (int)(data[2] * frame.cols);
+                    int h = (int)(data[3] * frame.rows);
                     int left = cx - w / 2;
                     int top = cy - h / 2;
-                    cv::rectangle(frame, cv::Rect(left, top, w, h), cv::Scalar(255, (128 * i) % 256, 0), 2);
-                    std::string label = cv::format("%s %.2f", classes[classIdPoint.x].c_str(), confidence);
-                    int baseline;
-                    cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
-
-                    top = std::max(top, labelSize.height);
-                    cv::rectangle(frame, cv::Point(left, top - labelSize.height),
-                                  cv::Point(left + labelSize.width, top + baseline), cv::Scalar::all(255), cv::FILLED);
-                    cv::putText(frame, label, cv::Point(left, top), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                    boxes.push_back(cv::Rect(left, top, w, h));
+                    confidences.push_back((float)confidence);
+                    classIds.push_back(classIdPoint.x);
                 }
             }
         }
+    }
+
+    // apply non-maximum suppression to suppress weak, overlapping bboxes
+    std::vector<int> idxs;
+    cv::dnn::NMSBoxes(boxes, confidences, confThreshold, 0.4, idxs);
+
+    for (int i = 0; i < idxs.size(); i++)
+    {
+        int idx = idxs[i];
+        cv::Rect rect = boxes[idx];
+        float confidence = confidences[idx];
+        int classId = classIds[idx];
+        int left = rect.x;
+        int top = rect.y;
+        int w = rect.width;
+        int h = rect.height;
+        cv::rectangle(frame, cv::Rect(left, top, w, h), cv::Scalar(255, (128 * i) % 256, 0), 2);
+        std::string label = cv::format("%s %.2f", classes[classId].c_str(), confidence);
+        int baseline;
+        cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseline);
+
+        top = std::max(top, labelSize.height);
+        cv::rectangle(frame, cv::Point(left, top - labelSize.height),
+                      cv::Point(left + labelSize.width, top + baseline), cv::Scalar::all(255), cv::FILLED);
+        cv::putText(frame, label, cv::Point(left, top), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
     }
 }

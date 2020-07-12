@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
 
-width = 640
-height = 480
 inW = 416
 inH = 416
 classesFile = "coco.names"
@@ -12,35 +10,52 @@ confThreshold = 0.5
 
 
 def postprocess(frame, outs, outLayerType, classes):
+    height, width = frame.shape[:2]
+    boxes = []
+    confidences = []
+    classIds = []
 
     if outLayerType == 'Region':
         for out in outs:
             for i, data in enumerate(out):
-                box = data[0:4] * np.array([width, height, width, height])
-                cx = int(box[0])
-                cy = int(box[1])
-                w = int(box[2])
-                h = int(box[3])
                 scores = data[5:]
                 classId = np.argmax(scores)
-                confidence = scores[classId]
+                confidence = float(scores[classId])
                 if confThreshold < confidence:
+                    box = data[0:4] * np.array([width, height, width, height])
+                    cx = int(box[0])
+                    cy = int(box[1])
+                    w = int(box[2])
+                    h = int(box[3])
                     left = int(cx - w / 2)
                     top = int(cy - h / 2)
-                    cv2.rectangle(frame,
-                                  (left, top),
-                                  (left+w, top+h),
-                                  (255, (128*i) % 256, 0), 2)
-                    label = "{} {:.2f}".format(classes[classId], confidence)
-                    labelSize, baseline = cv2.getTextSize(
-                        label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                    top = max(top, labelSize[1])
-                    cv2.rectangle(frame,
-                                  (left, top-labelSize[1]),
-                                  (left+labelSize[0], top+baseline),
-                                  (255, 255, 255), cv2.FILLED)
-                    cv2.putText(frame, label,
-                                (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+                    boxes.append([left, top, w, h])
+                    confidences.append(confidence)
+                    classIds.append(classId)
+
+    # apply non-maximum suppression to suppress weak, overlapping bboxes
+    idxs = cv2.dnn.NMSBoxes(boxes, confidences, confThreshold, 0.4)
+
+    if len(idxs) > 0:
+        for i in idxs.flatten():
+            (left, top, w, h) = (boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3])
+            confidence = confidences[i]
+            classId = classIds[i]
+            # draw bbox rectangle and label on the image
+            cv2.rectangle(frame,
+                          (left, top),
+                          (left+w, top+h),
+                          (255,128*float(i),0),2)
+            label = "{} {:.2f}".format(classes[classId], confidence)
+            labelSize, baseline = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            top = max(top, labelSize[1])
+            cv2.rectangle(frame,
+                          (left, top-labelSize[1]),
+                          (left+labelSize[0], top+baseline),
+                          (255, 255, 255), cv2.FILLED)
+            cv2.putText(frame, label,
+                        (left, top), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
 
 
 if __name__ == '__main__':
