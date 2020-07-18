@@ -1,3 +1,5 @@
+import org.bytedeco.javacpp.Loader;
+import org.bytedeco.opencv.opencv_java;
 import org.bytedeco.opencv.global.opencv_core;
 import org.bytedeco.opencv.global.opencv_cudaimgproc;
 import org.bytedeco.opencv.global.opencv_imgcodecs;
@@ -10,6 +12,7 @@ import org.bytedeco.opencv.opencv_cudaimgproc.TemplateMatching;
 
 public class TemplateMatchingCuda {
     public static void main(String[] args) {
+        Loader.load(opencv_java.class);
         Mat img = opencv_imgcodecs.imread("messi5.jpg");
         Mat template = opencv_imgcodecs.imread("template.jpg");
         int width = template.cols();
@@ -27,7 +30,7 @@ public class TemplateMatchingCuda {
         opencv_core.minMaxLoc(res, (double[]) null, null, top_left, null, new Mat());
         Point bottom_right = new Point(top_left.x() + width, top_left.y() + height);
         opencv_imgproc.rectangle(img, top_left, bottom_right, new Scalar(255, 139, 0, 0), 2, opencv_imgproc.CV_AA, 0);
-        OpenCVFX.imshow("TemplateMatching", img);
+        OpenCVFX.imshow("TemplateMatchingCuda", img);
         while (OpenCVFX.waitKey() != 27) {
             try {
                 Thread.sleep(1000);
