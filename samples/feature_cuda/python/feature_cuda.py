@@ -13,14 +13,14 @@ def refineMatches(matches):
 if __name__ == '__main__':
     width = 640
     height = 480
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
     # initialize orb and bfmatcher
-    orb = cv2.ORB_create(nfeatures=500, scaleFactor=1.2, nlevels=8, edgeThreshold=31,
-                         firstLevel=0, WTA_K=2, scoreType=cv2.ORB_HARRIS_SCORE, patchSize=31, fastThreshold=20)
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
+    orb_cuda = cv2.cuda.ORB_create(nfeatures=500, scaleFactor=1.2, nlevels=8, edgeThreshold=31,
+                         firstLevel=0, WTA_K=2, scoreType=cv2.ORB_HARRIS_SCORE, patchSize=31, fastThreshold=20, blurForDescriptor=False)
+    bf_cuda = cv2.cuda.DescriptorMatcher_createBFMatcher(cv2.NORM_HAMMING)
     tMat = None
     tKp = None
     tDesc = None
@@ -32,13 +32,15 @@ if __name__ == '__main__':
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # detect ORB keypoint and compute description
-        kp, desc = orb.detectAndCompute(frame, None)
+        frame_cuda = cv2.cuda_GpuMat(frame)
+        kp_cuda, desc = orb_cuda.detectAndComputeAsync(frame_cuda, None)
+        kp = orb_cuda.convert(kp_cuda)
         if tMat is None:
             tMat = frame
             tKp = kp
             tDesc = desc
         # brute force knn match
-        matches = bf.knnMatch(desc, tDesc, k=2)
+        matches = bf_cuda.knnMatch(desc, tDesc, k=2)
 
         # apply Lowe's ratio test
         matches = refineMatches(matches)

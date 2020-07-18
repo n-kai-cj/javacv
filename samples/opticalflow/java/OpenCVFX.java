@@ -42,6 +42,7 @@ public class OpenCVFX {
             ImShowThread im = new ImShowThread(name);
             im.start();
             list.add(im);
+            im.addImage(data, 0, data.length, width, height);
         }
     }
 
@@ -134,7 +135,6 @@ public class OpenCVFX {
             int width = 1;
             int height = 1;
             PixelFormat<ByteBuffer> pf = PixelFormat.getByteRgbInstance();
-            boolean isLaunching = false;
             while (this.loopFlag) {
                 Cls cls;
                 try {
@@ -147,9 +147,7 @@ public class OpenCVFX {
                     sleep(30);
                     continue;
                 }
-                if (!isLaunching &&
-                        (!this.isLaunch || width != cls.width || height != cls.height)) {
-                    isLaunching = true;
+                if (!this.isLaunch || width != cls.width || height != cls.height) {
                     try {
                         Platform.startup(() -> launchFxWindow(imageView, cls.width, cls.height, this.window_name));
                     } catch (IllegalStateException ise) {
@@ -159,11 +157,11 @@ public class OpenCVFX {
                     width = cls.width;
                     height = cls.height;
                     writableImage = new WritableImage(width, height);
+                }
+                while (!this.isLaunch) {
                     sleep(100);
                 }
-                if (!this.isLaunch) continue;
-                isLaunching = false;
-    
+
                 writableImage.getPixelWriter().setPixels(0, 0, width, height, pf, cls.data, 0, width * 3);
                 imageView.setImage(writableImage);
             }

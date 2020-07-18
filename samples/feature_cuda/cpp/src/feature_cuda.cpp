@@ -14,11 +14,11 @@ int main(int argc, char *argv[])
     cap.open(0);
 
     // initailize orb and bfmatcher
-    cv::Ptr<cv::FeatureDetector> orb = cv::ORB::create(500, 1.2, 8, 31, 0, 2, cv::ORB::HARRIS_SCORE, 31, 20);
-    cv::Ptr<cv::BFMatcher> bfMatcher = cv::BFMatcher::create(cv::NORM_HAMMING, false);
+    cv::Ptr<cv::FeatureDetector> orb_cuda = cv::cuda::ORB::create(500, 1.2, 8, 31, 0, 2, cv::ORB::HARRIS_SCORE, 31, 20, false);
+    cv::Ptr<cv::cuda::DescriptorMatcher> bfMatcher_cuda = cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING);
     cv::Mat tMat;
     std::vector<cv::KeyPoint> tKp;
-    cv::Mat tDesc;
+    cv::cuda::GpuMat tDesc_cuda;
     while (true)
     {
         cv::Mat frame;
@@ -32,17 +32,18 @@ int main(int argc, char *argv[])
         // detect ORB keypoint and compute description
         std::vector<cv::KeyPoint> kp;
         std::vector<std::vector<cv::DMatch>> matches;
-        cv::Mat desc;
-        orb->detectAndCompute(frame, cv::Mat(), kp, desc);
+        cv::cuda::GpuMat desc;
+        cv::cuda::GpuMat frame_cuda(frame);
+        orb_cuda->detectAndCompute(frame_cuda, cv::cuda::GpuMat(), kp, desc);
         if (tMat.empty())
         {
             tMat = frame.clone();
             tKp = kp;
-            tDesc = desc.clone();
+            tDesc_cuda = desc.clone();
         }
 
         // brute force knn match
-        bfMatcher->knnMatch(desc, tDesc, matches, 2);
+        bfMatcher_cuda->knnMatch(desc, tDesc_cuda, matches, 2);
 
         // apply Lowe's ratio test
         matches = refineMatches(matches);

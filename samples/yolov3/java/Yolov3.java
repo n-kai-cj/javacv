@@ -139,24 +139,17 @@ public class Yolov3 {
             int by = box.y() + box.height();
             Rect rect = new Rect(new Point(tx, ty), new Point(bx, by));
 
-            final int thickness = 1;
-            final Scalar borderColor = new Scalar(0, 255, (128 * idx) % 256, 0);
-            final Scalar fontColor = new Scalar(0, 0, 0, 120);
-            final int font = opencv_imgproc.FONT_HERSHEY_DUPLEX;
-            final double fontScale = 1.0;
-            final String label = String.format("%s : %.2f[%%]", nameList.get(classIds.get(idx)), confidences.get(idx) * 100.0);
-            final Size textSize = opencv_imgproc.getTextSize(label, font, fontScale, thickness, (int[]) null);
-            final int textTy = Math.max(ty - 10, 0);
+            Scalar color = new Scalar(0, 255, (128 * i) % 256, 0);
+            String label = String.format("%s %.2f", nameList.get(classIds.get(idx)), confidences.get(idx));
+            IntPointer baseline = new IntPointer(1);
+            Size labelSize = opencv_imgproc.getTextSize(label, opencv_imgproc.FONT_HERSHEY_SIMPLEX, 0.5, 1, baseline);
 
-            opencv_imgproc.rectangle(frame, rect,
-                    borderColor, thickness, opencv_imgproc.CV_AA, 0);
-            opencv_imgproc.rectangle(frame,
-                    new Rect(new Point(tx, textTy - textSize.height()), new Point(bx, ty)),
-                    borderColor, opencv_imgproc.FILLED, opencv_imgproc.CV_AA, 0);
-            opencv_imgproc.putText(frame,
-                    label, new Point(tx, textTy), font, fontScale, fontColor,
-                    thickness, opencv_imgproc.LINE_AA, false);
-
+            opencv_imgproc.rectangle(frame, rect, color, 2, opencv_imgproc.CV_AA, 0);
+            opencv_imgproc.rectangle(frame, new Point(left, top - labelSize.height()),
+                    new Point(left + labelSize.width(), top + baseline.get()),
+                    Scalar.all(255), opencv_imgproc.FILLED, opencv_imgproc.CV_AA, 0);
+            opencv_imgproc.putText(frame, label, new Point(tx, ty), opencv_imgproc.FONT_HERSHEY_SIMPLEX,
+                    0.5, Scalar.all(0), 1, opencv_imgproc.CV_AA, false);
         }
     }
 

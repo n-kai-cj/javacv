@@ -6,8 +6,12 @@ height = 480
 cap = cv2.VideoCapture()
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-cap.open(1)
-prevgray = None
+cap.open(0)
+prevgray_cuda = None
+
+optflow_cuda = cv2.cuda.FarnebackOpticalFlow_create(numLevels=5, pyrScale=0.5, fastPyramids=False,
+    winSize=13, numIters=10, polyN=5, polySigma=1.1, flags=0)
+
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -15,14 +19,15 @@ while True:
 
     # gray scale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    if prevgray is None:
-        prevgray = gray.copy()
+    if prevgray_cuda is None:
+        prevgray_cuda = cv2.cuda_GpuMat(gray.copy())
         continue
 
     # calculate dense optical flow
-    flow = cv2.calcOpticalFlowFarneback(prevgray, gray, None,
-                                        0.5, 3, 15, 3, 5, 1.1,
-                                        cv2.OPTFLOW_FARNEBACK_GAUSSIAN)
+    gray_cuda = cv2.cuda_GpuMat()
+    gray_cuda.upload(gray)
+    flow_cuda = optflow_cuda.calc(prevgray_cuda, gray_cuda, None)
+    flow = flow_cuda.download()
 
     # draw direction of flow
     for y in range(0, frame.shape[0], 20):
@@ -41,7 +46,7 @@ while True:
     if key == 27:
         break
 
-    prevgray = gray.copy()
+    prevgray_cuda = gray_cuda
 
 
 cap.release()
