@@ -1,0 +1,22 @@
+/downloads/
+/target/
+**/cppbuild/**
+**/target/**
+
+# Mac
+.DS_Store
+
+# Eclipse
+.classpath
+.project
+.settings
+
+# IntelliJ
+*.iml
+.idea
+
+# VSCode
+.vscode
+
+*.jpg
+*.mp4
