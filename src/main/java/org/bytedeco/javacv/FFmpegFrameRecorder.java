@@ -70,6 +70,7 @@ import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.IntPointer;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.Pointer;
+import org.bytedeco.javacpp.PointerScope;
 import org.bytedeco.javacpp.PointerPointer;
 import org.bytedeco.javacpp.ShortPointer;
 
@@ -163,10 +164,8 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         this.sampleRate    = 44100;
 
         this.interleaved = true;
-
-        this.video_pkt = new AVPacket();
-        this.audio_pkt = new AVPacket();
     }
+
     public FFmpegFrameRecorder(OutputStream outputStream, int audioChannels) {
         this(outputStream.toString(), audioChannels);
         this.outputStream = outputStream;
@@ -187,8 +186,20 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             releaseUnsafe();
         }
     }
-    public void releaseUnsafe() throws Exception {
+    public synchronized void releaseUnsafe() throws Exception {
         started = false;
+
+        if (plane_ptr != null && plane_ptr2 != null) {
+            plane_ptr.releaseReference();
+            plane_ptr2.releaseReference();
+            plane_ptr = plane_ptr2 = null;
+        }
+
+        if (video_pkt != null && audio_pkt != null) {
+            video_pkt.releaseReference();
+            audio_pkt.releaseReference();
+            video_pkt = audio_pkt = null;
+        }
 
         /* close each codec */
         if (video_c != null) {
@@ -218,6 +229,14 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         if (frame != null) {
             av_frame_free(frame);
             frame = null;
+        }
+        if (samples_in != null) {
+            for (int i = 0; i < samples_in.length; i++) {
+                if (samples_in[i] != null) {
+                    samples_in[i].releaseReference();
+                }
+            }
+            samples_in = null;
         }
         if (samples_out != null) {
             for (int i = 0; i < samples_out.length; i++) {
@@ -249,20 +268,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             }
 
             /* free the streams */
-            int nb_streams = oc.nb_streams();
-            for (int i = 0; i < nb_streams; i++) {
-                av_free(oc.streams(i).codec());
-                av_free(oc.streams(i));
-            }
-
-            /* free metadata */
-            if (oc.metadata() != null) {
-                av_dict_free(oc.metadata());
-                oc.metadata(null);
-            }
-
-            /* free the stream */
-            av_free(oc);
+            avformat_free_context(oc);
             oc = null;
         }
 
@@ -350,8 +356,6 @@ public class FFmpegFrameRecorder extends FrameRecorder {
     private AVFrame frame;
     private Pointer[] samples_in;
     private BytePointer[] samples_out;
-    private PointerPointer samples_in_ptr;
-    private PointerPointer samples_out_ptr;
     private BytePointer audio_outbuf;
     private int audio_outbuf_size;
     private int audio_input_frame_size;
@@ -363,6 +367,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
     private SwsContext img_convert_ctx;
     private SwrContext samples_convert_ctx;
     private int samples_channels, samples_format, samples_rate;
+    private PointerPointer plane_ptr, plane_ptr2;
     private AVPacket video_pkt, audio_pkt;
     private int[] got_video_packet, got_audio_packet;
     private AVFormatContext ifmt_ctx;
@@ -383,7 +388,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         if (picture == null) { super.setFrameNumber(frameNumber); } else { picture.pts(frameNumber); }
     }
 
-    /** best guess for timestamp in microseconds... */
+    /** Returns best guess for timestamp in microseconds... */
     @Override public long getTimestamp() {
         return Math.round(getFrameNumber() * 1000000L / getFrameRate());
     }
@@ -396,13 +401,15 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         start();
     }
 
-    public void start() throws Exception {
+    @Override public void start() throws Exception {
         synchronized (org.bytedeco.ffmpeg.global.avcodec.class) {
             startUnsafe();
         }
     }
 
-    public void startUnsafe() throws Exception {
+    public synchronized void startUnsafe() throws Exception {
+        try (PointerScope scope = new PointerScope()) {
+
         if (oc != null && !oc.isNull()) {
             throw new Exception("start() has already been called: Call stop() before calling start() again.");
         }
@@ -419,6 +426,10 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         audio_c = null;
         video_st = null;
         audio_st = null;
+        plane_ptr  = new PointerPointer(AVFrame.AV_NUM_DATA_POINTERS).retainReference();
+        plane_ptr2 = new PointerPointer(AVFrame.AV_NUM_DATA_POINTERS).retainReference();
+        video_pkt = new AVPacket().retainReference();
+        audio_pkt = new AVPacket().retainReference();
         got_video_packet = new int[1];
         got_audio_packet = new int[1];
 
@@ -652,8 +663,8 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             }
 
             if (inpAudioStream != null && audioChannels > 0) {
-                if ((ret = avcodec_copy_context(audio_st.codec(), inpAudioStream.codec()))  < 0) {
-                    throw new Exception("avcodec_copy_context() error:\tFailed to copy context from input audio to output audio stream codec context\n");
+                if ((ret = avcodec_copy_context(audio_st.codec(), inpAudioStream.codec())) < 0) {
+                    throw new Exception("avcodec_copy_context() error " + ret + ": Failed to copy context from input audio to output audio stream codec context\n");
                 }
 
                 audioBitrate = (int) inpAudioStream.codec().bit_rate();
@@ -779,7 +790,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             /* copy the stream parameters to the muxer */
             if ((ret = avcodec_parameters_from_context(video_st.codecpar(), video_c)) < 0) {
                 releaseUnsafe();
-                throw new Exception("avcodec_parameters_from_context() error: Could not copy the video stream parameters.");
+                throw new Exception("avcodec_parameters_from_context() error " + ret + ": Could not copy the video stream parameters.");
             }
 
             AVDictionary metadata = new AVDictionary(null);
@@ -839,8 +850,6 @@ public class FFmpegFrameRecorder extends FrameRecorder {
                 samples_out[i] = new BytePointer(av_malloc(data_size)).capacity(data_size);
             }
             samples_in = new Pointer[AVFrame.AV_NUM_DATA_POINTERS];
-            samples_in_ptr  = new PointerPointer(AVFrame.AV_NUM_DATA_POINTERS);
-            samples_out_ptr = new PointerPointer(AVFrame.AV_NUM_DATA_POINTERS);
 
             /* allocate the audio frame */
             if ((frame = av_frame_alloc()) == null) {
@@ -852,7 +861,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             /* copy the stream parameters to the muxer */
             if ((ret = avcodec_parameters_from_context(audio_st.codecpar(), audio_c)) < 0) {
                 releaseUnsafe();
-                throw new Exception("avcodec_parameters_from_context() error: Could not copy the audio stream parameters.");
+                throw new Exception("avcodec_parameters_from_context() error " + ret + ": Could not copy the audio stream parameters.");
             }
 
             AVDictionary metadata = new AVDictionary(null);
@@ -895,9 +904,11 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         }
 
         started = true;
+
+        }
     }
 
-    public void flush() throws Exception {
+    public synchronized void flush() throws Exception {
         synchronized (oc) {
             /* flush all the buffers */
             while (video_st != null && ifmt_ctx == null && recordImage(0, 0, 0, 0, 0, AV_PIX_FMT_NONE, (Buffer[])null));
@@ -927,7 +938,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
     @Override public void record(Frame frame) throws Exception {
         record(frame, frame.opaque instanceof AVFrame ? ((AVFrame)frame.opaque).format() : AV_PIX_FMT_NONE);
     }
-    public void record(Frame frame, int pixelFormat) throws Exception {
+    public synchronized void record(Frame frame, int pixelFormat) throws Exception {
         if (frame == null || (frame.image == null && frame.samples == null)) {
             recordImage(0, 0, 0, 0, 0, pixelFormat, (Buffer[])null);
         } else {
@@ -941,7 +952,9 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         }
     }
 
-    public boolean recordImage(int width, int height, int depth, int channels, int stride, int pixelFormat, Buffer ... image) throws Exception {
+    public synchronized boolean recordImage(int width, int height, int depth, int channels, int stride, int pixelFormat, Buffer ... image) throws Exception {
+        try (PointerScope scope = new PointerScope()) {
+
         if (video_st == null) {
             throw new Exception("No video output stream (Is imageWidth > 0 && imageHeight > 0 and has start() been called?)");
         }
@@ -1047,12 +1060,16 @@ public class FFmpegFrameRecorder extends FrameRecorder {
 
         writePacket(AVMEDIA_TYPE_VIDEO, video_pkt);
         return image != null ? (video_pkt.flags() & AV_PKT_FLAG_KEY) != 0 : got_video_packet[0] != 0;
+
+        }
     }
 
     public boolean recordSamples(Buffer ... samples) throws Exception {
         return recordSamples(0, 0, samples);
     }
-    public boolean recordSamples(int sampleRate, int audioChannels, Buffer ... samples) throws Exception {
+    public synchronized boolean recordSamples(int sampleRate, int audioChannels, Buffer ... samples) throws Exception {
+        try (PointerScope scope = new PointerScope()) {
+
         if (audio_st == null) {
             throw new Exception("No audio output stream (Is audioChannels > 0 and has start() been called?)");
         }
@@ -1090,7 +1107,10 @@ public class FFmpegFrameRecorder extends FrameRecorder {
                 if (samples_in[i] instanceof BytePointer && samples_in[i].capacity() >= inputSize && b.hasArray()) {
                     ((BytePointer)samples_in[i]).position(0).put(b.array(), b.position(), inputSize);
                 } else {
-                    samples_in[i] = new BytePointer(b);
+                    if (samples_in[i] != null) {
+                        samples_in[i].releaseReference();
+                    }
+                    samples_in[i] = new BytePointer(b).retainReference();
                 }
             }
         } else if (samples != null && samples[0] instanceof ShortBuffer) {
@@ -1101,7 +1121,10 @@ public class FFmpegFrameRecorder extends FrameRecorder {
                 if (samples_in[i] instanceof ShortPointer && samples_in[i].capacity() >= inputSize && b.hasArray()) {
                     ((ShortPointer)samples_in[i]).position(0).put(b.array(), samples[i].position(), inputSize);
                 } else {
-                    samples_in[i] = new ShortPointer(b);
+                    if (samples_in[i] != null) {
+                        samples_in[i].releaseReference();
+                    }
+                    samples_in[i] = new ShortPointer(b).retainReference();
                 }
             }
         } else if (samples != null && samples[0] instanceof IntBuffer) {
@@ -1112,7 +1135,10 @@ public class FFmpegFrameRecorder extends FrameRecorder {
                 if (samples_in[i] instanceof IntPointer && samples_in[i].capacity() >= inputSize && b.hasArray()) {
                     ((IntPointer)samples_in[i]).position(0).put(b.array(), samples[i].position(), inputSize);
                 } else {
-                    samples_in[i] = new IntPointer(b);
+                    if (samples_in[i] != null) {
+                        samples_in[i].releaseReference();
+                    }
+                    samples_in[i] = new IntPointer(b).retainReference();
                 }
             }
         } else if (samples != null && samples[0] instanceof FloatBuffer) {
@@ -1123,7 +1149,10 @@ public class FFmpegFrameRecorder extends FrameRecorder {
                 if (samples_in[i] instanceof FloatPointer && samples_in[i].capacity() >= inputSize && b.hasArray()) {
                     ((FloatPointer)samples_in[i]).position(0).put(b.array(), b.position(), inputSize);
                 } else {
-                    samples_in[i] = new FloatPointer(b);
+                    if (samples_in[i] != null) {
+                        samples_in[i].releaseReference();
+                    }
+                    samples_in[i] = new FloatPointer(b).retainReference();
                 }
             }
         } else if (samples != null && samples[0] instanceof DoubleBuffer) {
@@ -1134,7 +1163,10 @@ public class FFmpegFrameRecorder extends FrameRecorder {
                 if (samples_in[i] instanceof DoublePointer && samples_in[i].capacity() >= inputSize && b.hasArray()) {
                     ((DoublePointer)samples_in[i]).position(0).put(b.array(), b.position(), inputSize);
                 } else {
-                    samples_in[i] = new DoublePointer(b);
+                    if (samples_in[i] != null) {
+                        samples_in[i].releaseReference();
+                    }
+                    samples_in[i] = new DoublePointer(b).retainReference();
                 }
             }
         } else if (samples != null) {
@@ -1163,12 +1195,12 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             int outputCount = (int)Math.min((samples_out[0].limit() - samples_out[0].position()) / (outputChannels * outputDepth), Integer.MAX_VALUE);
             inputCount = Math.min(inputCount, (outputCount * sampleRate + audio_c.sample_rate() - 1) / audio_c.sample_rate());
             for (int i = 0; samples != null && i < samples.length; i++) {
-                samples_in_ptr.put(i, samples_in[i]);
+                plane_ptr.put(i, samples_in[i]);
             }
             for (int i = 0; i < samples_out.length; i++) {
-                samples_out_ptr.put(i, samples_out[i]);
+                plane_ptr2.put(i, samples_out[i]);
             }
-            if ((ret = swr_convert(samples_convert_ctx, samples_out_ptr, outputCount, samples_in_ptr, inputCount)) < 0) {
+            if ((ret = swr_convert(samples_convert_ctx, plane_ptr2, outputCount, plane_ptr, inputCount)) < 0) {
                 throw new Exception("swr_convert() error " + ret + ": Cannot convert audio samples.");
             } else if (ret == 0) {
                 break;
@@ -1185,6 +1217,8 @@ public class FFmpegFrameRecorder extends FrameRecorder {
             }
         }
         return samples != null ? frame.key_frame() != 0 : record((AVFrame)null);
+
+        }
     }
 
     private void writeSamples(int nb_samples) throws Exception {
@@ -1210,7 +1244,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         record(frame);
     }
 
-    boolean record(AVFrame frame) throws Exception {
+    private boolean record(AVFrame frame) throws Exception {
         int ret;
 
         av_init_packet(audio_pkt);
@@ -1262,7 +1296,7 @@ public class FFmpegFrameRecorder extends FrameRecorder {
         av_packet_unref(avPacket);
     }
 
-    public boolean recordPacket(AVPacket pkt) throws Exception {
+    public synchronized boolean recordPacket(AVPacket pkt) throws Exception {
         if (ifmt_ctx == null) {
             throw new Exception("No input format context (Has start(AVFormatContext) been called?)");
         }
