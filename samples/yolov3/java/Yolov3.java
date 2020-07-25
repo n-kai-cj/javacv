@@ -145,8 +145,8 @@ public class Yolov3 {
             Size labelSize = opencv_imgproc.getTextSize(label, opencv_imgproc.FONT_HERSHEY_SIMPLEX, 0.5, 1, baseline);
 
             opencv_imgproc.rectangle(frame, rect, color, 2, opencv_imgproc.CV_AA, 0);
-            opencv_imgproc.rectangle(frame, new Point(left, top - labelSize.height()),
-                    new Point(left + labelSize.width(), top + baseline.get()),
+            opencv_imgproc.rectangle(frame, new Point(tx, ty - labelSize.height()),
+                    new Point(tx + labelSize.width(), ty + baseline.get()),
                     Scalar.all(255), opencv_imgproc.FILLED, opencv_imgproc.CV_AA, 0);
             opencv_imgproc.putText(frame, label, new Point(tx, ty), opencv_imgproc.FONT_HERSHEY_SIMPLEX,
                     0.5, Scalar.all(0), 1, opencv_imgproc.CV_AA, false);
