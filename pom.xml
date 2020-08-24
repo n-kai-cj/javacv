@@ -75,12 +75,12 @@
     <dependency>
       <groupId>org.bytedeco</groupId>
       <artifactId>opencv</artifactId>
-      <version>4.3.0-${javacpp.version}</version>
+      <version>4.4.0-${javacpp.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bytedeco</groupId>
       <artifactId>ffmpeg</artifactId>
-      <version>4.3-${javacpp.version}</version>
+      <version>4.3.1-${javacpp.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bytedeco</groupId>
@@ -130,7 +130,7 @@
     <dependency>
       <groupId>org.bytedeco</groupId>
       <artifactId>leptonica</artifactId>
-      <version>1.79.0-${javacpp.version}</version>
+      <version>1.80.0-${javacpp.version}</version>
     </dependency>
     <dependency>
       <groupId>org.bytedeco</groupId>
