@@ -117,7 +117,7 @@ if __name__ == '__main__':
     K[1, 2] = cy
     distCoeffs = (k1, k2, p1, p2)
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
     scale = 0.2
     markerLengthMeter = 0.2
     last_t = [0, 0, 0]

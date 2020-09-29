@@ -58,7 +58,7 @@ public class ArUco {
         di.put(0, 2, p1);
         di.put(0, 3, p2);
 
-        VideoCapture cap = new VideoCapture(1);
+        VideoCapture cap = new VideoCapture(0);
         Mat _objPoints = new Mat();
 
         while (true) {

@@ -158,7 +158,7 @@ int main(int argc, char *argv[])
     cam_pose.SetIdentity();
     std::vector<pangolin::OpenGlMatrix> cams;
 
-    cv::VideoCapture cap = cv::VideoCapture(1);
+    cv::VideoCapture cap = cv::VideoCapture(0);
     float scale = 0.2f;
     float markerLengthMeter = 0.2f;
     int camSize = 10;
