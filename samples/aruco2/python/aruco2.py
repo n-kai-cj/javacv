@@ -22,7 +22,7 @@ def show(name, frame):
     return True
 
 
-def update_camera(K, R, t, scale=0.3):
+def update_camera(K, w, h, R, t, scale=0.3):
     # intrinsics
     Kinv = np.linalg.inv(K/scale)
 
@@ -154,7 +154,7 @@ if __name__ == '__main__':
             t = -R.T @ t
             R = R.T
             # show camera pose on Open3D
-            update_camera(K, R, t, scale)
+            update_camera(K, w, h, R, t, scale)
             update_trajectory(last_t, t)
             last_t = t
 
