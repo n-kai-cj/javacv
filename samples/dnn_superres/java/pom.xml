@@ -1,0 +1,57 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.bytedeco.opencv</groupId>
+    <artifactId>dnn_superres</artifactId>
+    <version>1.5.4</version>
+    <properties>
+        <exec.mainClass>DnnSuperRes</exec.mainClass>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv-platform</artifactId>
+            <version>4.4.0-1.5.4</version>
+        </dependency>
+
+        <!-- Additional dependencies required to use CUDA and cuDNN -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv-platform-gpu</artifactId>
+            <version>4.4.0-1.5.4</version>
+        </dependency>
+
+        <!-- Additional dependencies to use bundled CUDA and cuDNN -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>cuda-platform-redist</artifactId>
+            <version>11.0-8.0-1.5.4</version>
+        </dependency>
+
+        <!-- Additional dependencies to use bundled full version of MKL -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>mkl-platform-redist</artifactId>
+            <version>2020.3-1.5.4</version>
+        </dependency>
+
+        <!-- Optional dependencies to load the Python module -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>numpy-platform</artifactId>
+            <version>1.19.1-1.5.4</version>
+        </dependency>
+
+        <!-- JavaFX dependencies -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>11</version>
+        </dependency>
+
+    </dependencies>
+    <build>
+        <sourceDirectory>.</sourceDirectory>
+    </build>
+</project>
